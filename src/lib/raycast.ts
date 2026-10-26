@@ -1,4 +1,12 @@
-import { Color, environment, getPreferenceValues, openExtensionPreferences, showToast, Toast } from "@raycast/api";
+import {
+  Color,
+  environment,
+  getPreferenceValues,
+  LocalStorage,
+  openExtensionPreferences,
+  showToast,
+  Toast,
+} from "@raycast/api";
 import { AuthError, createClient, OutsetaClient } from "./outseta/client";
 import { StatusColor } from "./outseta/format";
 
@@ -17,14 +25,26 @@ export function getClient(): OutsetaClient {
 }
 
 // API keys have full admin access and the developer's only account is a live one, so in
-// development every write must target a case listed in OUTSETA_WRITE_ALLOWLIST. If Raycast
-// doesn't pass the variable through, all writes are blocked, which is the safe default.
-function guardWrite(description: string, caseUid: string) {
+// development every write must target a case explicitly allowed with allowDevWrites. Raycast
+// doesn't pass shell environment variables to extensions, hence LocalStorage.
+const DEV_WRITE_ALLOWLIST_KEY = "dev-write-allowlist";
+
+async function devWriteAllowlist(): Promise<string[]> {
+  const stored = await LocalStorage.getItem<string>(DEV_WRITE_ALLOWLIST_KEY);
+  return stored ? (JSON.parse(stored) as string[]) : [];
+}
+
+async function guardWrite(description: string, caseUid: string) {
   if (!environment.isDevelopment) return;
-  const allowlist = (process.env.OUTSETA_WRITE_ALLOWLIST ?? "").split(",").filter(Boolean);
-  if (!allowlist.includes(caseUid)) {
-    throw new Error(`Development guard: ${description} blocked, ${caseUid} is not in OUTSETA_WRITE_ALLOWLIST.`);
+  if (!(await devWriteAllowlist()).includes(caseUid)) {
+    throw new Error(`Development guard: ${description} blocked. Run "Allow Replies to This Case (Dev)" first.`);
   }
+}
+
+export async function allowDevWrites(caseUid: string) {
+  const allowlist = new Set(await devWriteAllowlist());
+  allowlist.add(caseUid);
+  await LocalStorage.setItem(DEV_WRITE_ALLOWLIST_KEY, JSON.stringify([...allowlist]));
 }
 
 export function toRaycastColor(color: StatusColor): Color {

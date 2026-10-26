@@ -4,14 +4,16 @@ import personDetail from "../../../fixtures/person-detail.json";
 import {
   accountStageColor,
   adminUrl,
+  caseMarkdown,
   formatDate,
   formatMoney,
   formatSubscriptionPrice,
+  htmlToText,
   personName,
   plainTextToHtml,
   primaryAccount,
 } from "./format";
-import { Account, AccountStage, BillingRenewalTerm, Person } from "./types";
+import { Account, AccountStage, BillingRenewalTerm, CaseHistoryType, Person } from "./types";
 
 describe("accountStageColor", () => {
   it.each([
@@ -102,5 +104,65 @@ describe("adminUrl", () => {
     expect(adminUrl("acme", "person", "p1")).toBe("https://acme.outseta.com/#/app/crm/people/p1");
     expect(adminUrl("acme", "account", "a1")).toBe("https://acme.outseta.com/#/app/crm/accounts/a1");
     expect(adminUrl("acme", "case", "c1")).toBe("https://acme.outseta.com/#/app/support/tickets/c1");
+  });
+});
+
+describe("htmlToText", () => {
+  it("keeps paragraph and line breaks and decodes entities", () => {
+    expect(htmlToText("<p>Hi&nbsp;there,<br>thanks &amp; bye</p><p>&lt;3</p>")).toBe("Hi there,\nthanks & bye\n\n<3");
+  });
+
+  it("drops empty padding paragraphs the admin editor adds", () => {
+    expect(htmlToText("<p>Hey there</p>\n<p>&nbsp;</p>\n<p>&nbsp;</p>")).toBe("Hey there");
+  });
+
+  it("returns empty text for missing html", () => {
+    expect(htmlToText(null)).toBe("");
+  });
+});
+
+describe("caseMarkdown", () => {
+  it("renders the opening message, then replies and notes in time order", () => {
+    const markdown = caseMarkdown({
+      Uid: "c1",
+      Subject: "I need help",
+      Body: "<p>Please help me</p>",
+      SubmittedDateTime: "2026-10-26T20:02:55",
+      FromPerson: { Uid: "p1", FullName: "Ada Lovelace" },
+      CaseHistories: [
+        {
+          Uid: "h2",
+          Type: CaseHistoryType.Note,
+          AgentName: "Grace",
+          Comment: "<p>Check billing</p>",
+          HistoryDateTime: "2026-10-26T20:10:00",
+        },
+        {
+          Uid: "h1",
+          Type: CaseHistoryType.AgentReply,
+          AgentName: "Grace",
+          Comment: "<p>On it</p>",
+          HistoryDateTime: "2026-10-26T20:05:00",
+        },
+        {
+          Uid: "h3",
+          Type: CaseHistoryType.Assigned,
+          Comment: "Grace assigned this ticket to Grace",
+          HistoryDateTime: "2026-10-26T20:11:00",
+        },
+      ],
+    });
+
+    expect(markdown).toContain("# I need help");
+    expect(markdown).toContain("**Ada Lovelace**");
+    expect(markdown.indexOf("On it")).toBeLessThan(markdown.indexOf("Check billing"));
+    expect(markdown).toContain("📝 **Note by Grace**");
+    expect(markdown).toContain("_Grace assigned this ticket to Grace");
+  });
+
+  it("falls back for a case without subject or body", () => {
+    const markdown = caseMarkdown({ Uid: "c1" });
+    expect(markdown).toContain("# (no subject)");
+    expect(markdown).toContain("_No message._");
   });
 });

@@ -10,8 +10,8 @@ export interface Credentials {
 
 export interface ClientOptions {
   fetch?: typeof fetch;
-  /** Called before every write. Throw to block it (used to guard the real account in development). */
-  guardWrite?: (description: string, caseUid: string) => void;
+  /** Called before every write. Throw or reject to block it (guards the real account in development). */
+  guardWrite?: (description: string, caseUid: string) => void | Promise<void>;
   /** Delay before retrying a 429, in ms. */
   retryDelayMs?: number;
 }
@@ -129,8 +129,8 @@ export function createClient(credentials: Credentials, options: ClientOptions = 
     return { items, total, hasMore: (page + 1) * appliedLimit < total };
   }
 
-  function guard(description: string, caseUid: string) {
-    options.guardWrite?.(description, caseUid);
+  async function guard(description: string, caseUid: string) {
+    await options.guardWrite?.(description, caseUid);
   }
 
   return {
@@ -154,7 +154,7 @@ export function createClient(credentials: Credentials, options: ClientOptions = 
         throw new OutsetaError("Replies to spam cases are not emailed. Mark the case as not spam first.", 400);
       }
       if (!agentName.trim()) throw new OutsetaError("Set your agent name in the extension preferences.", 400);
-      guard("reply to case", supportCase.Uid);
+      await guard("reply to case", supportCase.Uid);
       await request<void>("POST", `/support/cases/${encodeURIComponent(supportCase.Uid)}/replies`, {
         Comment: comment,
         AgentName: agentName.trim(),

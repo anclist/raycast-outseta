@@ -1,4 +1,13 @@
-import { Account, AccountStage, BillingRenewalTerm, Case, CaseStatus, Person, Subscription } from "./types";
+import {
+  Account,
+  AccountStage,
+  BillingRenewalTerm,
+  Case,
+  CaseHistoryType,
+  CaseStatus,
+  Person,
+  Subscription,
+} from "./types";
 
 // Plain color names, mapped to Raycast's Color enum in the UI layer so this stays testable.
 export type StatusColor = "green" | "yellow" | "orange" | "red" | "secondary";
@@ -127,4 +136,63 @@ export function stripeCustomerUrl(stripeId: string): string {
 
 export function caseTitle(supportCase: Case): string {
   return supportCase.Subject?.trim() || "(no subject)";
+}
+
+/** Outseta stores messages as HTML; Raycast renders markdown, so reduce them to plain text. */
+export function htmlToText(html: string | null | undefined): string {
+  if (!html) return "";
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h\d)>/gi, "\n\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function formatDateTime(value: string | null | undefined): string {
+  const date = parseDate(value);
+  return date
+    ? date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : "";
+}
+
+/** The case as a conversation: the opening message, then replies, notes and status changes in order. */
+export function caseMarkdown(supportCase: Case): string {
+  const customer = personName(supportCase.FromPerson);
+  const parts = [
+    `# ${caseTitle(supportCase)}`,
+    `**${customer}** · ${formatDateTime(supportCase.SubmittedDateTime)}`,
+    htmlToText(supportCase.Body) || "_No message._",
+  ];
+
+  const histories = [...(supportCase.CaseHistories ?? [])].sort((a, b) =>
+    (a.HistoryDateTime ?? "").localeCompare(b.HistoryDateTime ?? ""),
+  );
+  for (const history of histories) {
+    const when = formatDateTime(history.HistoryDateTime);
+    const text = htmlToText(history.Comment);
+    switch (history.Type) {
+      case CaseHistoryType.PersonReply:
+        parts.push("---", `**${customer}** · ${when}`, text);
+        break;
+      case CaseHistoryType.AgentReply:
+      case CaseHistoryType.AutoReply:
+        parts.push("---", `**${history.AgentName || "Agent"}** · ${when}`, text);
+        break;
+      case CaseHistoryType.Note:
+        parts.push("---", `📝 **Note by ${history.AgentName || "Agent"}** · ${when}`, text);
+        break;
+      default:
+        if (text) parts.push(`_${text} · ${when}_`);
+    }
+  }
+  return parts.join("\n\n");
 }
