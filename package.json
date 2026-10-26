@@ -61,11 +61,12 @@
       "required": true
     },
     {
-      "name": "agentEmail",
-      "title": "Your Agent Email",
-      "description": "Optional. Enables the \"Assigned to Me\" filter in Support Cases.",
+      "name": "agentName",
+      "title": "Agent Name",
+      "description": "Your name as customers see it on support replies.",
       "type": "textfield",
-      "required": false
+      "required": true,
+      "placeholder": "Jane Doe"
     }
   ],
   "dependencies": {

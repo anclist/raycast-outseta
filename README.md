@@ -12,7 +12,9 @@ Look up people and accounts, and triage support cases in your [Outseta](https://
 
 1. In Outseta, go to **Settings → Integrations → API Keys** and create a key.
 2. Open the extension preferences in Raycast and fill in your subdomain, API key and secret key.
-3. Optionally set your agent email to enable the "Assigned to Me" filter.
+3. Set your agent name: customers see it as the sender of your replies.
+
+To use the "Assigned to Me" filter in Support Cases, run "This Is Me" on any case assigned to you.
 
 Set the subdomain to `demo` to try the extension with sample data, no Outseta account needed.
 
