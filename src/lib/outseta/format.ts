@@ -164,13 +164,18 @@ function formatDateTime(value: string | null | undefined): string {
     : "";
 }
 
+// Markdown joins single newlines into one paragraph; chat transcripts depend on them.
+function hardLineBreaks(text: string): string {
+  return text.replace(/(?<!\n)\n(?!\n)/g, "  \n");
+}
+
 /** The case as a conversation: the opening message, then replies, notes and status changes in order. */
 export function caseMarkdown(supportCase: Case): string {
   const customer = personName(supportCase.FromPerson);
   const parts = [
-    `# ${caseTitle(supportCase)}`,
+    `## ${caseTitle(supportCase)}`,
     `**${customer}** · ${formatDateTime(supportCase.SubmittedDateTime)}`,
-    htmlToText(supportCase.Body) || "_No message._",
+    hardLineBreaks(htmlToText(supportCase.Body)) || "_No message._",
   ];
 
   const histories = [...(supportCase.CaseHistories ?? [])].sort((a, b) =>
@@ -178,7 +183,7 @@ export function caseMarkdown(supportCase: Case): string {
   );
   for (const history of histories) {
     const when = formatDateTime(history.HistoryDateTime);
-    const text = htmlToText(history.Comment);
+    const text = hardLineBreaks(htmlToText(history.Comment));
     switch (history.Type) {
       case CaseHistoryType.PersonReply:
         parts.push("---", `**${customer}** · ${when}`, text);

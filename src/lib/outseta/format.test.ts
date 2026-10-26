@@ -153,16 +153,21 @@ describe("caseMarkdown", () => {
       ],
     });
 
-    expect(markdown).toContain("# I need help");
+    expect(markdown).toContain("## I need help");
     expect(markdown).toContain("**Ada Lovelace**");
     expect(markdown.indexOf("On it")).toBeLessThan(markdown.indexOf("Check billing"));
     expect(markdown).toContain("📝 **Note by Grace**");
     expect(markdown).toContain("_Grace assigned this ticket to Grace");
   });
 
+  it("keeps single line breaks from chat transcripts", () => {
+    const markdown = caseMarkdown({ Uid: "c1", Body: "Bot: Hi<br>User: Hello<br>Bot: Bye" });
+    expect(markdown).toContain("Bot: Hi  \nUser: Hello  \nBot: Bye");
+  });
+
   it("falls back for a case without subject or body", () => {
     const markdown = caseMarkdown({ Uid: "c1" });
-    expect(markdown).toContain("# (no subject)");
+    expect(markdown).toContain("## (no subject)");
     expect(markdown).toContain("_No message._");
   });
 });

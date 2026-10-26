@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Color, environment, Icon, Keyboard, List, showToast, Toast } from "@raycast/api";
 import { useCachedPromise, useCachedState, useLocalStorage } from "@raycast/utils";
-import { useState } from "react";
+import React, { useState } from "react";
 import { PersonView } from "./components/details";
 import { ReplyForm } from "./components/reply-form";
 import { adminUrl, caseMarkdown, caseStatusLabel, caseTitle, parseDate, personName } from "./lib/outseta/format";
@@ -33,6 +33,39 @@ const sourceIcons: Record<CaseSource, Icon> = {
 function shortcut(key: Keyboard.KeyEquivalent, shift = false): Keyboard.Shortcut {
   const extra: Keyboard.KeyModifier[] = shift ? ["shift"] : [];
   return { macOS: { modifiers: ["cmd", ...extra], key }, Windows: { modifiers: ["ctrl", ...extra], key } };
+}
+
+const filterTitles: Record<Filter, string> = {
+  unassigned: "Unassigned",
+  mine: "Assigned to Me",
+  open: "All Open",
+  closed: "Closed",
+};
+const filterKeys: Record<Filter, Keyboard.KeyEquivalent> = { unassigned: "1", mine: "2", open: "3", closed: "4" };
+
+// Hint the filter shortcuts in the dropdown, where people look for filters.
+const modifierLabel = process.platform === "win32" ? "Ctrl+" : "⌘";
+function dropdownTitle(filter: Filter) {
+  return `${filterTitles[filter]}  ${modifierLabel}${filterKeys[filter]}`;
+}
+
+function FilterActions(props: { current: Filter; hasMe: boolean; onChange: (filter: Filter) => void }) {
+  const filters = (Object.keys(filterTitles) as Filter[]).filter((f) => f !== "mine" || props.hasMe);
+  return (
+    <ActionPanel.Section title="Filter">
+      {filters
+        .filter((f) => f !== props.current)
+        .map((f) => (
+          <Action
+            key={f}
+            title={`Show ${filterTitles[f]}`}
+            icon={Icon.Filter}
+            shortcut={shortcut(filterKeys[f])}
+            onAction={() => props.onChange(f)}
+          />
+        ))}
+    </ActionPanel.Section>
+  );
 }
 
 export default function Command() {
@@ -79,10 +112,10 @@ export default function Command() {
       pagination={pagination}
       searchBarAccessory={
         <List.Dropdown tooltip="Filter cases" value={effectiveFilter} onChange={(v) => setFilter(v as Filter)}>
-          <List.Dropdown.Item title="Unassigned" value="unassigned" icon={Icon.Tray} />
-          {myUid ? <List.Dropdown.Item title="Assigned to Me" value="mine" icon={Icon.Person} /> : null}
-          <List.Dropdown.Item title="All Open" value="open" icon={Icon.Envelope} />
-          <List.Dropdown.Item title="Closed" value="closed" icon={Icon.CheckCircle} />
+          <List.Dropdown.Item title={dropdownTitle("unassigned")} value="unassigned" icon={Icon.Tray} />
+          {myUid ? <List.Dropdown.Item title={dropdownTitle("mine")} value="mine" icon={Icon.Person} /> : null}
+          <List.Dropdown.Item title={dropdownTitle("open")} value="open" icon={Icon.Envelope} />
+          <List.Dropdown.Item title={dropdownTitle("closed")} value="closed" icon={Icon.CheckCircle} />
         </List.Dropdown>
       }
     >
@@ -94,6 +127,11 @@ export default function Command() {
             ? 'To filter by "Assigned to Me", select a case assigned to you and run "This Is Me" (⌘⇧M).'
             : undefined
         }
+        actions={
+          <ActionPanel>
+            <FilterActions current={effectiveFilter} hasMe={!!myUid} onChange={setFilter} />
+          </ActionPanel>
+        }
       />
       {data?.map((supportCase) => (
         <CaseItem
@@ -103,6 +141,7 @@ export default function Command() {
           myUid={myUid}
           onChanged={revalidate}
           onRememberMe={rememberMe}
+          filterActions={<FilterActions current={effectiveFilter} hasMe={!!myUid} onChange={setFilter} />}
         />
       ))}
     </List>
@@ -115,6 +154,7 @@ function CaseItem(props: {
   myUid: string | undefined;
   onChanged: () => void;
   onRememberMe: (supportCase: Case) => void;
+  filterActions: React.ReactNode;
 }) {
   const { supportCase, myUid } = props;
   const {
@@ -180,6 +220,7 @@ function CaseItem(props: {
               }}
             />
           ) : null}
+          {props.filterActions}
           <ActionPanel.Section>
             {full.FromPerson?.Email ? (
               <Action.CopyToClipboard
