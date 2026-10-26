@@ -43,3 +43,12 @@ Findings from probing a real account (2026-10-26) that the public docs don't cov
 - No rate-limit headers are returned.
 - Subscription pricing: `CurrentSubscription.Rate` and `BillingRenewalTerm`; plans carry
   `MonthlyRate`, `AnnualRate`, `QuarterlyRate`, `OneTimeRate`.
+- `DELETE /support/cases/{uid}` and `DELETE /crm/people/{uid}` return `200`; the record then reads
+  back as `404`. Used to remove the test case and the person its email created.
+
+## Development write guard
+
+Raycast doesn't pass shell environment variables to extensions, so in development builds writes
+are allowed only for cases added with the dev-only "Allow Replies to This Case (Dev)" action
+(stored in LocalStorage). `scripts/reply-test.ts` runs outside Raycast and still uses
+`OUTSETA_WRITE_ALLOWLIST`.
