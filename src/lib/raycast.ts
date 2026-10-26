@@ -7,6 +7,7 @@ import {
   showToast,
   Toast,
 } from "@raycast/api";
+import { createDemoFetch } from "./demo/fetch";
 import { AuthError, createClient, OutsetaClient } from "./outseta/client";
 import { StatusColor } from "./outseta/format";
 
@@ -16,10 +17,18 @@ export function getSubdomain(): string {
   return getPreferenceValues<Preferences>().subdomain.trim().toLowerCase();
 }
 
+export function isDemo(): boolean {
+  return getSubdomain() === "demo";
+}
+
 export function getClient(): OutsetaClient {
   if (!client) {
     const { apiKey, secretKey } = getPreferenceValues<Preferences>();
-    client = createClient({ subdomain: getSubdomain(), apiKey: apiKey.trim(), secretKey }, { guardWrite });
+    const credentials = { subdomain: getSubdomain(), apiKey: apiKey.trim(), secretKey };
+    // Demo replies stay in memory, so they need no guard.
+    client = isDemo()
+      ? createClient(credentials, { fetch: createDemoFetch() })
+      : createClient(credentials, { guardWrite });
   }
   return client;
 }

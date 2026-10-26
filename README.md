@@ -16,7 +16,9 @@ Look up people and accounts, and triage support cases in your [Outseta](https://
 
 To use the "Assigned to Me" filter in Support Cases, run "This Is Me" on any case assigned to you.
 
-Set the subdomain to `demo` to try the extension with sample data, no Outseta account needed.
+### Demo mode
+
+Set the subdomain to `demo` and type anything for the API key and secret key to try the extension with sample data, no Outseta account needed. The sample covers every subscription status and a mix of open, assigned, closed and spam cases. Replies you send in demo mode are kept in memory and never emailed. "Open in Outseta" links don't work in demo mode.
 
 > Outseta API keys have full admin access. The extension only writes when you send a support reply, and always asks for confirmation first.
 
@@ -41,5 +43,7 @@ npm run dev     # run in Raycast
 npm test        # unit tests
 npm run lint
 ```
+
+Set the subdomain to `demo` to develop against the sample data in `src/lib/demo/` without touching a real account.
 
 Raw API responses saved during development go in `fixtures/raw/` (gitignored). Only scrubbed fixtures in `fixtures/` are committed.
