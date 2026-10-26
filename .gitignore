@@ -12,6 +12,7 @@ compiled_raycast_rust
 .DS_Store
 .env
 .env.*
+!.env.example
 
 # Raw API responses from a real Outseta account: may contain customer PII. Never commit.
 /fixtures/raw/
