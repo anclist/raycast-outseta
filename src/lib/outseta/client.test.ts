@@ -1,0 +1,134 @@
+import { describe, expect, it, vi } from "vitest";
+import accountsList from "../../../fixtures/accounts-list.json";
+import { AuthError, createClient, OutsetaError, RateLimitError } from "./client";
+import { CaseStatus } from "./types";
+
+const credentials = { subdomain: "acme", apiKey: "key", secretKey: "secret" };
+
+function stubFetch(...responses: Array<{ status: number; body?: unknown }>) {
+  const queue = [...responses];
+  return vi.fn<typeof fetch>(async () => {
+    const next = queue.shift() ?? { status: 200, body: {} };
+    const text = next.body === undefined ? "" : JSON.stringify(next.body);
+    return new Response(text, { status: next.status });
+  });
+}
+
+function requestedUrl(fetchMock: ReturnType<typeof stubFetch>, call = 0) {
+  return new URL(String(fetchMock.mock.calls[call]?.[0]));
+}
+
+describe("createClient", () => {
+  it("sends the Outseta auth header to the account's subdomain", async () => {
+    const fetchMock = stubFetch({ status: 200, body: accountsList });
+    await createClient(credentials, { fetch: fetchMock }).searchAccounts({ query: "acme" });
+
+    const url = requestedUrl(fetchMock);
+    expect(url.origin + url.pathname).toBe("https://acme.outseta.com/api/v1/crm/accounts");
+    expect(url.searchParams.get("q")).toBe("acme");
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Outseta key:secret");
+  });
+
+  it("treats offset as a page index when working out hasMore", async () => {
+    const fetchMock = stubFetch({ status: 200, body: accountsList });
+    const page = await createClient(credentials, { fetch: fetchMock }).searchAccounts({ pageSize: 3 });
+
+    expect(requestedUrl(fetchMock).searchParams.get("offset")).toBe("0");
+    expect(page.items).toHaveLength(3);
+    expect(page.total).toBe(5);
+    expect(page.hasMore).toBe(true);
+  });
+
+  it("reports no more pages on the last page", async () => {
+    const fetchMock = stubFetch({
+      status: 200,
+      body: { metadata: { limit: 3, offset: 1, total: 5 }, items: [{}, {}] },
+    });
+    const page = await createClient(credentials, { fetch: fetchMock }).searchAccounts({ page: 1, pageSize: 3 });
+    expect(page.hasMore).toBe(false);
+  });
+
+  it("skips empty filters", async () => {
+    const fetchMock = stubFetch({ status: 200, body: { items: [] } });
+    await createClient(credentials, { fetch: fetchMock }).searchCases({
+      filters: { Status: CaseStatus.Open, AssignedToPersonClientIdentifier: undefined },
+    });
+    const params = requestedUrl(fetchMock).searchParams;
+    expect(params.get("Status")).toBe("1");
+    expect(params.has("AssignedToPersonClientIdentifier")).toBe(false);
+  });
+
+  it("throws AuthError on 401", async () => {
+    const client = createClient(credentials, { fetch: stubFetch({ status: 401 }) });
+    await expect(client.getPerson("p1")).rejects.toBeInstanceOf(AuthError);
+  });
+
+  it("retries a 429 once, then succeeds", async () => {
+    const fetchMock = stubFetch({ status: 429 }, { status: 200, body: { Uid: "p1" } });
+    const person = await createClient(credentials, { fetch: fetchMock, retryDelayMs: 0 }).getPerson("p1");
+    expect(person.Uid).toBe("p1");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up after a second 429", async () => {
+    const client = createClient(credentials, {
+      fetch: stubFetch({ status: 429 }, { status: 429 }),
+      retryDelayMs: 0,
+    });
+    await expect(client.getPerson("p1")).rejects.toBeInstanceOf(RateLimitError);
+  });
+
+  it("throws OutsetaError with the status for other failures", async () => {
+    const client = createClient(credentials, { fetch: stubFetch({ status: 500 }) });
+    await expect(client.getCase("c1")).rejects.toMatchObject({ status: 500 });
+  });
+});
+
+describe("replyToCase", () => {
+  it("posts Comment and AgentName and accepts an empty response body", async () => {
+    const fetchMock = stubFetch({ status: 200 });
+    await createClient(credentials, { fetch: fetchMock }).replyToCase(
+      { Uid: "c1", Status: CaseStatus.Open },
+      "<p>Hi</p>",
+      " Jane ",
+    );
+
+    expect(requestedUrl(fetchMock).pathname).toBe("/api/v1/support/cases/c1/replies");
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ Comment: "<p>Hi</p>", AgentName: "Jane" });
+  });
+
+  it("refuses spam cases without calling the API", async () => {
+    const fetchMock = stubFetch();
+    const client = createClient(credentials, { fetch: fetchMock });
+    await expect(
+      client.replyToCase({ Uid: "c1", Status: CaseStatus.Spam }, "<p>Hi</p>", "Jane"),
+    ).rejects.toBeInstanceOf(OutsetaError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses an empty agent name", async () => {
+    const fetchMock = stubFetch();
+    const client = createClient(credentials, { fetch: fetchMock });
+    await expect(client.replyToCase({ Uid: "c1", Status: CaseStatus.Open }, "<p>Hi</p>", "  ")).rejects.toThrow(
+      /agent name/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("lets the write guard block the request", async () => {
+    const fetchMock = stubFetch();
+    const client = createClient(credentials, {
+      fetch: fetchMock,
+      guardWrite: () => {
+        throw new Error("blocked");
+      },
+    });
+    await expect(client.replyToCase({ Uid: "c1", Status: CaseStatus.Open }, "<p>Hi</p>", "Jane")).rejects.toThrow(
+      "blocked",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
