@@ -1,3 +1,4 @@
+import { plainTextToHtml } from "./format";
 import { Account, Case, CaseStatus, Page, Person } from "./types";
 
 // Kept free of @raycast/api imports so it can be unit tested with a stubbed fetch.
@@ -10,6 +11,8 @@ export interface Credentials {
 
 export interface ClientOptions {
   fetch?: typeof fetch;
+  /** Shown to customers as the sender of replies. */
+  agentName?: string;
   /** Called before every write. Throw or reject to block it (guards the real account in development). */
   guardWrite?: (description: string, caseUid: string) => void | Promise<void>;
   /** Delay before retrying a 429, in ms. */
@@ -38,6 +41,19 @@ export class RateLimitError extends OutsetaError {
     super("Outseta rate limit reached. Try again in a moment.", 429);
     this.name = "RateLimitError";
   }
+}
+
+/** A reply the client refuses to send. Nothing reached Outseta. */
+export class ReplyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ReplyError";
+  }
+}
+
+// Replies posted to spam cases are stored but not emailed.
+export function canReply(supportCase: Pick<Case, "Status">): boolean {
+  return supportCase.Status !== CaseStatus.Spam;
 }
 
 export interface SearchParams {
@@ -168,16 +184,18 @@ export function createClient(credentials: Credentials, options: ClientOptions = 
     getCase: (uid: string) =>
       request<Case>("GET", `/support/cases/${encodeURIComponent(uid)}?fields=${CASE_DETAIL_FIELDS}`),
 
-    /** Posts an agent reply. Outseta emails it to the customer with agentName as the sender name. */
-    async replyToCase(supportCase: Pick<Case, "Uid" | "Status">, comment: string, agentName: string) {
-      if (supportCase.Status === CaseStatus.Spam) {
-        throw new OutsetaError("Replies to spam cases are not emailed. Mark the case as not spam first.", 400);
+    /** Posts the plain text as a reply. Outseta emails it to the customer with agentName as the sender name. */
+    async replyToCase(supportCase: Pick<Case, "Uid" | "Status">, text: string) {
+      if (!canReply(supportCase)) {
+        throw new ReplyError("Replies to spam cases are not emailed. Mark the case as not spam first.");
       }
-      if (!agentName.trim()) throw new OutsetaError("Set your agent name in the extension preferences.", 400);
+      if (!text.trim()) throw new ReplyError("Write a reply first.");
+      const agentName = options.agentName?.trim();
+      if (!agentName) throw new ReplyError("Set your agent name in the extension preferences.");
       await guard("reply to case", supportCase.Uid);
       await request<void>("POST", `/support/cases/${encodeURIComponent(supportCase.Uid)}/replies`, {
-        Comment: comment,
-        AgentName: agentName.trim(),
+        Comment: plainTextToHtml(text),
+        AgentName: agentName,
       });
     },
   };

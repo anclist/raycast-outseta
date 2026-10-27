@@ -1,23 +1,12 @@
-import {
-  Action,
-  ActionPanel,
-  Alert,
-  confirmAlert,
-  Form,
-  getPreferenceValues,
-  Icon,
-  showToast,
-  Toast,
-  useNavigation,
-} from "@raycast/api";
+import { Action, ActionPanel, Alert, confirmAlert, Form, Icon, showToast, Toast, useNavigation } from "@raycast/api";
 import { useState } from "react";
-import { caseTitle, personName, plainTextToHtml } from "../lib/outseta/format";
+import { caseTitle, personName } from "../lib/outseta/format";
 import { Case } from "../lib/outseta/types";
-import { getClient, showErrorToast } from "../lib/raycast";
+import { getAgentName, getClient, showErrorToast } from "../lib/raycast";
 
 export function ReplyForm({ supportCase, onSent }: { supportCase: Case; onSent: () => void }) {
   const { pop } = useNavigation();
-  const { agentName } = getPreferenceValues<Preferences>();
+  const agentName = getAgentName();
   const [error, setError] = useState<string>();
   const recipient = supportCase.FromPerson?.Email ?? personName(supportCase.FromPerson);
 
@@ -29,7 +18,7 @@ export function ReplyForm({ supportCase, onSent }: { supportCase: Case; onSent: 
 
     const confirmed = await confirmAlert({
       title: "Send reply?",
-      message: `${recipient} will be emailed from "${agentName.trim()}".`,
+      message: `${recipient} will be emailed from "${agentName}".`,
       icon: Icon.Envelope,
       primaryAction: { title: "Send", style: Alert.ActionStyle.Default },
     });
@@ -37,7 +26,7 @@ export function ReplyForm({ supportCase, onSent }: { supportCase: Case; onSent: 
 
     const toast = await showToast({ style: Toast.Style.Animated, title: "Sending reply" });
     try {
-      await getClient().replyToCase(supportCase, plainTextToHtml(values.reply), agentName);
+      await getClient().replyToCase(supportCase, values.reply);
       toast.style = Toast.Style.Success;
       toast.title = "Reply sent";
       onSent();
@@ -58,7 +47,7 @@ export function ReplyForm({ supportCase, onSent }: { supportCase: Case; onSent: 
       }
     >
       <Form.Description title="To" text={recipient} />
-      <Form.Description title="From" text={agentName.trim()} />
+      <Form.Description title="From" text={agentName} />
       <Form.TextArea
         id="reply"
         title="Reply"
