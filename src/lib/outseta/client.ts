@@ -40,13 +40,30 @@ export class RateLimitError extends OutsetaError {
   }
 }
 
-export interface ListParams {
+export interface SearchParams {
   query?: string;
   page?: number;
+}
+
+/** Which cases to list. Omitted criteria don't constrain the results. */
+export interface CaseFilter {
+  status?: CaseStatus;
+  assignee?: "unassigned" | { uid: string };
+}
+
+interface ListParams extends SearchParams {
   pageSize?: number;
   fields?: string;
   orderBy?: string;
-  filters?: Record<string, string | number | null | undefined>;
+  filters?: Record<string, string>;
+}
+
+function caseFilterParams(filter: CaseFilter): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (filter.status !== undefined) params.Status = String(filter.status);
+  if (filter.assignee === "unassigned") params.AssignedToPersonClientIdentifier__isnull = "true";
+  else if (filter.assignee) params.AssignedToPersonClientIdentifier = filter.assignee.uid;
+  return params;
 }
 
 // Child-object fields cap pages at 25; plain fields allow 100.
@@ -113,9 +130,7 @@ export function createClient(credentials: Credentials, options: ClientOptions = 
     if (params.query) search.set("q", params.query);
     if (params.fields) search.set("fields", params.fields);
     if (params.orderBy) search.set("orderBy", params.orderBy);
-    for (const [key, value] of Object.entries(params.filters ?? {})) {
-      if (value !== undefined && value !== null) search.set(key, String(value));
-    }
+    for (const [key, value] of Object.entries(params.filters ?? {})) search.set(key, value);
 
     const result = await request<{ items?: T[]; metadata?: { total?: number; limit?: number; offset?: number } }>(
       "GET",
@@ -134,12 +149,17 @@ export function createClient(credentials: Credentials, options: ClientOptions = 
   }
 
   return {
-    searchPeople: (params: ListParams) =>
-      list<Person>("/crm/people", { fields: PERSON_LIST_FIELDS, pageSize: 100, ...params }),
-    searchAccounts: (params: ListParams) =>
-      list<Account>("/crm/accounts", { fields: ACCOUNT_LIST_FIELDS, pageSize: 100, ...params }),
-    searchCases: (params: ListParams) =>
-      list<Case>("/support/cases", { fields: CASE_LIST_FIELDS, orderBy: "LastActivity DESC", ...params }),
+    searchPeople: (params: SearchParams) =>
+      list<Person>("/crm/people", { ...params, fields: PERSON_LIST_FIELDS, pageSize: 100 }),
+    searchAccounts: (params: SearchParams) =>
+      list<Account>("/crm/accounts", { ...params, fields: ACCOUNT_LIST_FIELDS, pageSize: 100 }),
+    searchCases: ({ filter, ...params }: SearchParams & { filter?: CaseFilter }) =>
+      list<Case>("/support/cases", {
+        ...params,
+        fields: CASE_LIST_FIELDS,
+        orderBy: "LastActivity DESC",
+        filters: caseFilterParams(filter ?? {}),
+      }),
 
     getPerson: (uid: string) =>
       request<Person>("GET", `/crm/people/${encodeURIComponent(uid)}?fields=${PERSON_DETAIL_FIELDS}`),

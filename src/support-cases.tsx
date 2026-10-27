@@ -3,22 +3,23 @@ import { useCachedPromise, useCachedState, useLocalStorage } from "@raycast/util
 import React, { useState } from "react";
 import { PersonView } from "./components/details";
 import { ReplyForm } from "./components/reply-form";
+import { CaseFilter } from "./lib/outseta/client";
 import { adminUrl, caseMarkdown, caseStatusLabel, caseTitle, parseDate } from "./lib/outseta/format";
 import { Case, CaseSource, CaseStatus } from "./lib/outseta/types";
 import { allowDevWrites, getClient, getSubdomain, showErrorToast } from "./lib/raycast";
 
 type Filter = "unassigned" | "mine" | "open" | "closed";
 
-function filterParams(filter: Filter, myUid: string | undefined): Record<string, string | number> {
+function caseFilter(filter: Filter, myUid: string | undefined): CaseFilter {
   switch (filter) {
     case "unassigned":
-      return { Status: CaseStatus.Open, AssignedToPersonClientIdentifier__isnull: "true" };
+      return { status: CaseStatus.Open, assignee: "unassigned" };
     case "mine":
-      return { Status: CaseStatus.Open, AssignedToPersonClientIdentifier: myUid ?? "" };
+      return { status: CaseStatus.Open, assignee: myUid ? { uid: myUid } : "unassigned" };
     case "open":
-      return { Status: CaseStatus.Open };
+      return { status: CaseStatus.Open };
     case "closed":
-      return { Status: CaseStatus.Closed };
+      return { status: CaseStatus.Closed };
   }
 }
 
@@ -86,7 +87,7 @@ export default function Command() {
       const page = await getClient().searchCases({
         query: query.trim() || undefined,
         page: options.page,
-        filters: filterParams(activeFilter, me),
+        filter: caseFilter(activeFilter, me),
       });
       return { data: page.items, hasMore: page.hasMore };
     },
