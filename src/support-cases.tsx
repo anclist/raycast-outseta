@@ -3,7 +3,7 @@ import { useCachedPromise, useCachedState, useLocalStorage } from "@raycast/util
 import React, { useState } from "react";
 import { PersonView } from "./components/details";
 import { ReplyForm } from "./components/reply-form";
-import { adminUrl, caseMarkdown, caseStatusLabel, caseTitle, parseDate, personName } from "./lib/outseta/format";
+import { adminUrl, caseMarkdown, caseStatusLabel, caseTitle, parseDate } from "./lib/outseta/format";
 import { Case, CaseSource, CaseStatus } from "./lib/outseta/types";
 import { allowDevWrites, getClient, getSubdomain, showErrorToast } from "./lib/raycast";
 
@@ -73,7 +73,12 @@ export default function Command() {
   const [filter, setFilter] = useCachedState<Filter>("cases-filter", "unassigned");
   const [selectedUid, setSelectedUid] = useState<string>();
   // Agents aren't exposed by the API, so "me" is learned from a case the user says is assigned to them.
-  const { value: myUid, setValue: setMyUid, isLoading: isLoadingMe } = useLocalStorage<string>("my-agent-uid");
+  // Agent uids belong to one Outseta account, hence the subdomain in the key.
+  const {
+    value: myUid,
+    setValue: setMyUid,
+    isLoading: isLoadingMe,
+  } = useLocalStorage<string>(`my-agent-uid:${getSubdomain()}`);
   const effectiveFilter = filter === "mine" && !myUid ? "unassigned" : filter;
 
   const { data, isLoading, pagination, revalidate } = useCachedPromise(
@@ -184,7 +189,6 @@ function CaseItem(props: {
     <List.Item
       id={supportCase.Uid}
       title={caseTitle(supportCase)}
-      subtitle={personName(supportCase.FromPerson)}
       icon={supportCase.Source ? sourceIcons[supportCase.Source] : Icon.Envelope}
       accessories={accessories}
       detail={<List.Item.Detail isLoading={isLoading} markdown={detail ? caseMarkdown(full) : undefined} />}

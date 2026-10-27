@@ -73,7 +73,7 @@ function AccountItem(props: {
       detail={
         <List.Item.Detail
           isLoading={isLoading}
-          metadata={<AccountMetadata account={full} M={List.Item.Detail.Metadata} />}
+          metadata={<AccountMetadata key={detail ? "full" : "summary"} account={full} M={List.Item.Detail.Metadata} />}
         />
       }
       actions={<AccountActions account={full} onDetailToggle={props.onDetailToggle} />}

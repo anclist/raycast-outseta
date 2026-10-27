@@ -189,8 +189,10 @@ export function caseMarkdown(supportCase: Case): string {
         parts.push("---", `**${customer}** · ${when}`, text);
         break;
       case CaseHistoryType.AgentReply:
-      case CaseHistoryType.AutoReply:
         parts.push("---", `**${history.AgentName || "Agent"}** · ${when}`, text);
+        break;
+      case CaseHistoryType.AutoReply:
+        parts.push("---", `**${history.AgentName || "Auto-reply"}** · ${when}`, text);
         break;
       case CaseHistoryType.Note:
         parts.push("---", `📝 **Note by ${history.AgentName || "Agent"}** · ${when}`, text);

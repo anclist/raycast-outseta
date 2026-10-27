@@ -66,7 +66,7 @@ function PersonItem(props: { person: Person; selected: boolean; showingDetail: b
       detail={
         <List.Item.Detail
           isLoading={isLoading}
-          metadata={<PersonMetadata person={full} M={List.Item.Detail.Metadata} />}
+          metadata={<PersonMetadata key={detail ? "full" : "summary"} person={full} M={List.Item.Detail.Metadata} />}
         />
       }
       actions={<PersonActions person={full} onDetailToggle={props.onDetailToggle} />}

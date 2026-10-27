@@ -165,6 +165,14 @@ describe("caseMarkdown", () => {
     expect(markdown).toContain("Bot: Hi  \nUser: Hello  \nBot: Bye");
   });
 
+  it("labels automatic replies that have no agent name", () => {
+    const markdown = caseMarkdown({
+      Uid: "c1",
+      CaseHistories: [{ Uid: "h1", Type: CaseHistoryType.AutoReply, Comment: "<p>Thanks!</p>" }],
+    });
+    expect(markdown).toContain("**Auto-reply**");
+  });
+
   it("falls back for a case without subject or body", () => {
     const markdown = caseMarkdown({ Uid: "c1" });
     expect(markdown).toContain("## (no subject)");
