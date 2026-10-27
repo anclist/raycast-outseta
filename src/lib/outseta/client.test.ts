@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import accountsList from "../../../fixtures/accounts-list.json";
-import { AuthError, CaseFilter, createClient, OutsetaError, RateLimitError } from "./client";
+import { AuthError, canReply, CaseFilter, createClient, RateLimitError, ReplyError } from "./client";
 import { CaseStatus } from "./types";
 
 const credentials = { subdomain: "acme", apiKey: "key", secretKey: "secret" };
@@ -115,35 +115,34 @@ describe("searchCases", () => {
 });
 
 describe("replyToCase", () => {
-  it("posts Comment and AgentName and accepts an empty response body", async () => {
+  const openCase = { Uid: "c1", Status: CaseStatus.Open };
+
+  it("posts the text as HTML with the agent name and accepts an empty response body", async () => {
     const fetchMock = stubFetch({ status: 200 });
-    await createClient(credentials, { fetch: fetchMock }).replyToCase(
-      { Uid: "c1", Status: CaseStatus.Open },
-      "<p>Hi</p>",
-      " Jane ",
+    await createClient(credentials, { fetch: fetchMock, agentName: " Jane " }).replyToCase(
+      openCase,
+      "Hi <there>\n\nThanks",
     );
 
     expect(requestedUrl(fetchMock).pathname).toBe("/api/v1/support/cases/c1/replies");
     const init = fetchMock.mock.calls[0]?.[1];
     expect(init?.method).toBe("POST");
-    expect(JSON.parse(String(init?.body))).toEqual({ Comment: "<p>Hi</p>", AgentName: "Jane" });
+    expect(JSON.parse(String(init?.body))).toEqual({
+      Comment: "<p>Hi &lt;there&gt;</p><p>Thanks</p>",
+      AgentName: "Jane",
+    });
   });
 
-  it("refuses spam cases without calling the API", async () => {
+  it.each([
+    ["a spam case", { Uid: "c1", Status: CaseStatus.Spam }, "Hi", "Jane", /spam/],
+    ["empty text", openCase, "  \n ", "Jane", /Write a reply/],
+    ["an empty agent name", openCase, "Hi", "  ", /agent name/],
+    ["a missing agent name", openCase, "Hi", undefined, /agent name/],
+  ])("refuses %s without calling the API", async (_, supportCase, text, agentName, message) => {
     const fetchMock = stubFetch();
-    const client = createClient(credentials, { fetch: fetchMock });
-    await expect(
-      client.replyToCase({ Uid: "c1", Status: CaseStatus.Spam }, "<p>Hi</p>", "Jane"),
-    ).rejects.toBeInstanceOf(OutsetaError);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("refuses an empty agent name", async () => {
-    const fetchMock = stubFetch();
-    const client = createClient(credentials, { fetch: fetchMock });
-    await expect(client.replyToCase({ Uid: "c1", Status: CaseStatus.Open }, "<p>Hi</p>", "  ")).rejects.toThrow(
-      /agent name/,
-    );
+    const reply = createClient(credentials, { fetch: fetchMock, agentName }).replyToCase(supportCase, text);
+    await expect(reply).rejects.toBeInstanceOf(ReplyError);
+    await expect(reply).rejects.toThrow(message);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -151,13 +150,20 @@ describe("replyToCase", () => {
     const fetchMock = stubFetch();
     const client = createClient(credentials, {
       fetch: fetchMock,
+      agentName: "Jane",
       guardWrite: () => {
         throw new Error("blocked");
       },
     });
-    await expect(client.replyToCase({ Uid: "c1", Status: CaseStatus.Open }, "<p>Hi</p>", "Jane")).rejects.toThrow(
-      "blocked",
-    );
+    await expect(client.replyToCase(openCase, "Hi")).rejects.toThrow("blocked");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("canReply", () => {
+  it("allows replies to every case except spam", () => {
+    expect(canReply({ Status: CaseStatus.Open })).toBe(true);
+    expect(canReply({ Status: CaseStatus.Closed })).toBe(true);
+    expect(canReply({ Status: CaseStatus.Spam })).toBe(false);
   });
 });

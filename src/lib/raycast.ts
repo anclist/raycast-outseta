@@ -21,14 +21,19 @@ export function isDemo(): boolean {
   return getSubdomain() === "demo";
 }
 
+export function getAgentName(): string {
+  return getPreferenceValues<Preferences>().agentName.trim();
+}
+
 export function getClient(): OutsetaClient {
   if (!client) {
     const { apiKey, secretKey } = getPreferenceValues<Preferences>();
     const credentials = { subdomain: getSubdomain(), apiKey: apiKey.trim(), secretKey };
+    const agentName = getAgentName();
     // Demo replies stay in memory, so they need no guard.
     client = isDemo()
-      ? createClient(credentials, { fetch: createDemoFetch() })
-      : createClient(credentials, { guardWrite });
+      ? createClient(credentials, { agentName, fetch: createDemoFetch() })
+      : createClient(credentials, { agentName, guardWrite });
   }
   return client;
 }

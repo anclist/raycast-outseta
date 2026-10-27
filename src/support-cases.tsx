@@ -3,7 +3,7 @@ import { useCachedPromise, useCachedState, useLocalStorage } from "@raycast/util
 import React, { useState } from "react";
 import { PersonView } from "./components/details";
 import { ReplyForm } from "./components/reply-form";
-import { CaseFilter } from "./lib/outseta/client";
+import { canReply, CaseFilter } from "./lib/outseta/client";
 import { adminUrl, caseMarkdown, caseStatusLabel, caseTitle, parseDate } from "./lib/outseta/format";
 import { Case, CaseSource, CaseStatus } from "./lib/outseta/types";
 import { allowDevWrites, getClient, getSubdomain, showErrorToast } from "./lib/raycast";
@@ -195,9 +195,9 @@ function CaseItem(props: {
       detail={<List.Item.Detail isLoading={isLoading} markdown={detail ? caseMarkdown(full) : undefined} />}
       actions={
         <ActionPanel>
-          {full.Status === CaseStatus.Spam ? null : (
+          {canReply(full) ? (
             <Action.Push title="Reply" icon={Icon.Reply} target={<ReplyForm supportCase={full} onSent={onSent} />} />
-          )}
+          ) : null}
           <Action.OpenInBrowser title="Open in Outseta" url={adminUrl(getSubdomain(), "case", supportCase.Uid)} />
           {full.FromPerson?.Uid ? (
             <Action.Push

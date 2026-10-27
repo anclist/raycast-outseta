@@ -6,7 +6,10 @@ import { createDemoFetch } from "./fetch";
 
 function demoClient() {
   const data = buildDemoData(new Date("2026-10-26T12:00:00Z"));
-  const client = createClient({ subdomain: "demo", apiKey: "any", secretKey: "any" }, { fetch: createDemoFetch(data) });
+  const client = createClient(
+    { subdomain: "demo", apiKey: "any", secretKey: "any" },
+    { agentName: "Alex", fetch: createDemoFetch(data) },
+  );
   return { data, client };
 }
 
@@ -84,7 +87,7 @@ describe("createDemoFetch", () => {
   it("stores replies in memory", async () => {
     const { client } = demoClient();
     const before = await client.getCase("case-webhook");
-    await client.replyToCase(before, "<p>Five times.</p>", "Alex");
+    await client.replyToCase(before, "Five times.");
 
     const after = await client.getCase("case-webhook");
     expect(after.CaseHistories?.at(-1)).toMatchObject({
