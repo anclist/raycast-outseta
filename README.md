@@ -14,7 +14,7 @@ This is an unofficial community extension, built and maintained independently of
 
 1. In Outseta, go to **Settings → Integrations → API Keys** and create a key.
 2. Open the extension preferences in Raycast and fill in your subdomain, API key and secret key.
-3. Set your agent name: customers see it as the sender of your replies.
+3. Optionally set your agent name: customers see it as the sender of your replies. Without it, replies are signed with your company name.
 
 To use the "Assigned to Me" filter in Support Cases, run "This Is Me" on any case assigned to you.
 

@@ -17,6 +17,8 @@ import {
 // Dates are relative to `now` so the demo never looks stale.
 
 export const DEMO_AGENT_UID = "demo-agent-me";
+/** Signs replies sent without an agent name, as Outseta does with the real company name. */
+export const DEMO_COMPANY_NAME = "Demo Company";
 const OTHER_AGENT_UID = "demo-agent-sam";
 
 export interface DemoAccount extends Account {

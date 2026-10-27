@@ -1,5 +1,5 @@
 import { Account, Case, CaseHistoryType, Person } from "../outseta/types";
-import { buildDemoData, DemoAccount, DemoData, DemoPerson } from "./data";
+import { buildDemoData, DEMO_COMPANY_NAME, DemoAccount, DemoData, DemoPerson } from "./data";
 
 // A stand-in for fetch that answers the Outseta endpoints the client uses from in-memory demo
 // data, so the real client code runs unchanged. Replies are kept in memory and never sent.
@@ -67,8 +67,6 @@ export function createDemoFetch(data: DemoData = buildDemoData()): typeof fetch 
   function reply(caseUid: string, body: { Comment?: string; AgentName?: string }) {
     const supportCase = data.cases.find((c) => c.Uid === caseUid);
     if (!supportCase) return undefined;
-    // Same rule as the real API, which fails with an empty 500.
-    if (!body.AgentName) return null;
     const now = new Date().toISOString().slice(0, 19);
     supportCase.CaseHistories = [
       ...(supportCase.CaseHistories ?? []),
@@ -76,7 +74,7 @@ export function createDemoFetch(data: DemoData = buildDemoData()): typeof fetch 
         Uid: `history-reply-${Date.now()}`,
         HistoryDateTime: now,
         Type: CaseHistoryType.AgentReply,
-        AgentName: body.AgentName,
+        AgentName: body.AgentName || DEMO_COMPANY_NAME,
         Comment: body.Comment ?? "",
       },
     ];

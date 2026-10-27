@@ -1,16 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import accountsList from "../../../fixtures/accounts-list.json";
-import { AuthError, canReply, CaseFilter, createClient, RateLimitError, ReplyError } from "./client";
+import { AuthError, canReply, CaseFilter, createClient, RateLimitError, ReplyError, retryAfterMs } from "./client";
 import { CaseStatus } from "./types";
 
 const credentials = { subdomain: "acme", apiKey: "key", secretKey: "secret" };
 
-function stubFetch(...responses: Array<{ status: number; body?: unknown }>) {
+function stubFetch(...responses: Array<{ status: number; body?: unknown; headers?: Record<string, string> }>) {
   const queue = [...responses];
   return vi.fn<typeof fetch>(async () => {
     const next = queue.shift() ?? { status: 200, body: {} };
     const text = next.body === undefined ? "" : JSON.stringify(next.body);
-    return new Response(text, { status: next.status });
+    return new Response(text, { status: next.status, headers: next.headers });
   });
 }
 
@@ -59,6 +59,27 @@ describe("createClient", () => {
     const person = await createClient(credentials, { fetch: fetchMock, retryDelayMs: 0 }).getPerson("p1");
     expect(person.Uid).toBe("p1");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  describe("with fake timers", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("waits as long as Retry-After asks before retrying a 429", async () => {
+      vi.useFakeTimers();
+      const fetchMock = stubFetch(
+        { status: 429, headers: { "Retry-After": "10" } },
+        { status: 200, body: { Uid: "p1" } },
+      );
+      const person = createClient(credentials, { fetch: fetchMock, retryDelayMs: 0 }).getPerson("p1");
+
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await person).Uid).toBe("p1");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("gives up after a second 429", async () => {
@@ -134,13 +155,20 @@ describe("replyToCase", () => {
   });
 
   it.each([
-    ["a spam case", { Uid: "c1", Status: CaseStatus.Spam }, "Hi", "Jane", /spam/],
-    ["empty text", openCase, "  \n ", "Jane", /Write a reply/],
-    ["an empty agent name", openCase, "Hi", "  ", /agent name/],
-    ["a missing agent name", openCase, "Hi", undefined, /agent name/],
-  ])("refuses %s without calling the API", async (_, supportCase, text, agentName, message) => {
+    ["an empty", "  "],
+    ["a missing", undefined],
+  ])("leaves out AgentName with %s agent name so Outseta signs with the company name", async (_, agentName) => {
+    const fetchMock = stubFetch({ status: 200 });
+    await createClient(credentials, { fetch: fetchMock, agentName }).replyToCase(openCase, "Hi");
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ Comment: "<p>Hi</p>" });
+  });
+
+  it.each([
+    ["a spam case", { Uid: "c1", Status: CaseStatus.Spam }, "Hi", /spam/],
+    ["empty text", openCase, "  \n ", /Write a reply/],
+  ])("refuses %s without calling the API", async (_, supportCase, text, message) => {
     const fetchMock = stubFetch();
-    const reply = createClient(credentials, { fetch: fetchMock, agentName }).replyToCase(supportCase, text);
+    const reply = createClient(credentials, { fetch: fetchMock, agentName: "Jane" }).replyToCase(supportCase, text);
     await expect(reply).rejects.toBeInstanceOf(ReplyError);
     await expect(reply).rejects.toThrow(message);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -157,6 +185,17 @@ describe("replyToCase", () => {
     });
     await expect(client.replyToCase(openCase, "Hi")).rejects.toThrow("blocked");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("retryAfterMs", () => {
+  it("reads seconds and HTTP dates, and ignores anything else", () => {
+    const now = Date.parse("2026-10-27T12:00:00Z");
+    expect(retryAfterMs("10", now)).toBe(10_000);
+    expect(retryAfterMs("Tue, 27 Oct 2026 12:00:05 GMT", now)).toBe(5_000);
+    expect(retryAfterMs("Tue, 27 Oct 2026 11:00:00 GMT", now)).toBe(0);
+    expect(retryAfterMs("soon", now)).toBeUndefined();
+    expect(retryAfterMs(null, now)).toBeUndefined();
   });
 });
 
