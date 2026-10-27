@@ -35,10 +35,18 @@ describe("createDemoFetch", () => {
     const { client } = demoClient();
     expect((await client.searchPeople({ query: "okafor" })).items.map((p) => p.FullName)).toEqual(["Grace Okafor"]);
     expect((await client.searchPeople({ query: "atlas.example" })).items).toHaveLength(3);
+  });
 
-    const first = await client.searchPeople({ pageSize: 5 });
-    const second = await client.searchPeople({ pageSize: 5, page: 1 });
-    expect(first.hasMore).toBe(true);
+  it("pages results with offset as a page index", async () => {
+    const demoFetch = createDemoFetch(buildDemoData(new Date("2026-10-26T12:00:00Z")));
+    const getPage = async (offset: number) => {
+      const response = await demoFetch(`https://demo.outseta.com/api/v1/crm/people?limit=5&offset=${offset}`);
+      return (await response.json()) as { items: Array<{ Uid: string }>; metadata: { total: number } };
+    };
+    const first = await getPage(0);
+    const second = await getPage(1);
+    expect(first.items).toHaveLength(5);
+    expect(first.metadata.total).toBeGreaterThan(5);
     expect(second.items[0]?.Uid).not.toBe(first.items[0]?.Uid);
   });
 
@@ -57,22 +65,18 @@ describe("createDemoFetch", () => {
 
   it("applies the case filters the Support Cases command sends", async () => {
     const { client } = demoClient();
-    const unassigned = await client.searchCases({
-      filters: { Status: CaseStatus.Open, AssignedToPersonClientIdentifier__isnull: "true" },
-    });
+    const unassigned = await client.searchCases({ filter: { status: CaseStatus.Open, assignee: "unassigned" } });
     expect(unassigned.items.every((c) => c.Status === CaseStatus.Open && !c.AssignedToPersonClientIdentifier)).toBe(
       true,
     );
 
-    const mine = await client.searchCases({
-      filters: { Status: CaseStatus.Open, AssignedToPersonClientIdentifier: DEMO_AGENT_UID },
-    });
+    const mine = await client.searchCases({ filter: { status: CaseStatus.Open, assignee: { uid: DEMO_AGENT_UID } } });
     expect(mine.items.map((c) => c.Subject)).toEqual([
       "Adding 6 more seats before Monday",
       "CSV export missing custom fields",
     ]);
 
-    const closed = await client.searchCases({ filters: { Status: CaseStatus.Closed } });
+    const closed = await client.searchCases({ filter: { status: CaseStatus.Closed } });
     expect(closed.items).toHaveLength(3);
     expect(closed.items[0]).not.toHaveProperty("CaseHistories");
   });

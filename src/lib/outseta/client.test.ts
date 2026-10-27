@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import accountsList from "../../../fixtures/accounts-list.json";
-import { AuthError, createClient, OutsetaError, RateLimitError } from "./client";
+import { AuthError, CaseFilter, createClient, OutsetaError, RateLimitError } from "./client";
 import { CaseStatus } from "./types";
 
 const credentials = { subdomain: "acme", apiKey: "key", secretKey: "secret" };
@@ -32,7 +32,7 @@ describe("createClient", () => {
 
   it("treats offset as a page index when working out hasMore", async () => {
     const fetchMock = stubFetch({ status: 200, body: accountsList });
-    const page = await createClient(credentials, { fetch: fetchMock }).searchAccounts({ pageSize: 3 });
+    const page = await createClient(credentials, { fetch: fetchMock }).searchAccounts({});
 
     expect(requestedUrl(fetchMock).searchParams.get("offset")).toBe("0");
     expect(page.items).toHaveLength(3);
@@ -45,18 +45,8 @@ describe("createClient", () => {
       status: 200,
       body: { metadata: { limit: 3, offset: 1, total: 5 }, items: [{}, {}] },
     });
-    const page = await createClient(credentials, { fetch: fetchMock }).searchAccounts({ page: 1, pageSize: 3 });
+    const page = await createClient(credentials, { fetch: fetchMock }).searchAccounts({ page: 1 });
     expect(page.hasMore).toBe(false);
-  });
-
-  it("skips empty filters", async () => {
-    const fetchMock = stubFetch({ status: 200, body: { items: [] } });
-    await createClient(credentials, { fetch: fetchMock }).searchCases({
-      filters: { Status: CaseStatus.Open, AssignedToPersonClientIdentifier: undefined },
-    });
-    const params = requestedUrl(fetchMock).searchParams;
-    expect(params.get("Status")).toBe("1");
-    expect(params.has("AssignedToPersonClientIdentifier")).toBe(false);
   });
 
   it("throws AuthError on 401", async () => {
@@ -82,6 +72,45 @@ describe("createClient", () => {
   it("throws OutsetaError with the status for other failures", async () => {
     const client = createClient(credentials, { fetch: stubFetch({ status: 500 }) });
     await expect(client.getCase("c1")).rejects.toMatchObject({ status: 500 });
+  });
+});
+
+describe("searchCases", () => {
+  async function caseParams(filter?: CaseFilter) {
+    const fetchMock = stubFetch({ status: 200, body: { items: [] } });
+    await createClient(credentials, { fetch: fetchMock }).searchCases({ filter });
+    const params = Object.fromEntries(requestedUrl(fetchMock).searchParams);
+    delete params.limit;
+    delete params.offset;
+    delete params.fields;
+    delete params.orderBy;
+    return params;
+  }
+
+  it("sends no case filter params when no filter is given", async () => {
+    expect(await caseParams()).toEqual({});
+    expect(await caseParams({})).toEqual({});
+  });
+
+  it("filters by status", async () => {
+    expect(await caseParams({ status: CaseStatus.Closed })).toEqual({ Status: "2" });
+  });
+
+  it("filters open cases assigned to nobody", async () => {
+    expect(await caseParams({ status: CaseStatus.Open, assignee: "unassigned" })).toEqual({
+      Status: "1",
+      AssignedToPersonClientIdentifier__isnull: "true",
+    });
+  });
+
+  it("filters cases assigned to an agent", async () => {
+    expect(await caseParams({ assignee: { uid: "agent-1" } })).toEqual({ AssignedToPersonClientIdentifier: "agent-1" });
+  });
+
+  it("lists most recent activity first", async () => {
+    const fetchMock = stubFetch({ status: 200, body: { items: [] } });
+    await createClient(credentials, { fetch: fetchMock }).searchCases({});
+    expect(requestedUrl(fetchMock).searchParams.get("orderBy")).toBe("LastActivity DESC");
   });
 });
 
