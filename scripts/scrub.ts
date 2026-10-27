@@ -22,8 +22,9 @@ const keepKeys = new Set([
   "UnitOfMeasure",
   "StripePriceIds",
 ]);
-// Plans are the account owner's own product catalogue, not customer data.
-const keepKeysInPlan = new Set(["Name", "Description"]);
+// Plan names are the account owner's own product catalogue, not customer data. Descriptions are
+// faked anyway since they can name the business.
+const keepKeysInPlan = new Set(["Name"]);
 
 const datePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?$/;
 const firstNames = ["Ada", "Grace", "Alan", "Edsger", "Barbara", "Donald", "Frances", "Ken", "Radia", "Linus"];
