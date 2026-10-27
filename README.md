@@ -2,6 +2,8 @@
 
 Look up people and accounts, and triage support cases in your [Outseta](https://www.outseta.com) account without leaving Raycast.
 
+This is an unofficial community extension, built and maintained independently of Outseta. The Outseta name and logo are used with permission.
+
 ## Commands
 
 - **Search People** — find a person, see their account, plan, subscription status and last login.
