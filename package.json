@@ -63,9 +63,9 @@
     {
       "name": "agentName",
       "title": "Agent Name",
-      "description": "Your name as customers see it on support replies.",
+      "description": "Your name as customers see it on support replies. Leave empty to sign replies with your company name.",
       "type": "textfield",
-      "required": true,
+      "required": false,
       "placeholder": "Jane Doe"
     }
   ],

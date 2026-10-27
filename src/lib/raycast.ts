@@ -22,7 +22,7 @@ export function isDemo(): boolean {
 }
 
 export function getAgentName(): string {
-  return getPreferenceValues<Preferences>().agentName.trim();
+  return (getPreferenceValues<Preferences>().agentName ?? "").trim();
 }
 
 export function getClient(): OutsetaClient {

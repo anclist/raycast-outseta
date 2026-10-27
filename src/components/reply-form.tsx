@@ -7,6 +7,7 @@ import { getAgentName, getClient, showErrorToast } from "../lib/raycast";
 export function ReplyForm({ supportCase, onSent }: { supportCase: Case; onSent: () => void }) {
   const { pop } = useNavigation();
   const agentName = getAgentName();
+  const sender = agentName ? `"${agentName}"` : "your company name";
   const [error, setError] = useState<string>();
   const recipient = supportCase.FromPerson?.Email ?? personName(supportCase.FromPerson);
 
@@ -18,7 +19,7 @@ export function ReplyForm({ supportCase, onSent }: { supportCase: Case; onSent: 
 
     const confirmed = await confirmAlert({
       title: "Send reply?",
-      message: `${recipient} will be emailed from "${agentName}".`,
+      message: `${recipient} will be emailed from ${sender}.`,
       icon: Icon.Envelope,
       primaryAction: { title: "Send", style: Alert.ActionStyle.Default },
     });
@@ -47,7 +48,7 @@ export function ReplyForm({ supportCase, onSent }: { supportCase: Case; onSent: 
       }
     >
       <Form.Description title="To" text={recipient} />
-      <Form.Description title="From" text={agentName} />
+      <Form.Description title="From" text={agentName || "Your company name"} />
       <Form.TextArea
         id="reply"
         title="Reply"

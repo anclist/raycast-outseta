@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createClient } from "../outseta/client";
 import { AccountStage, CaseHistoryType, CaseStatus } from "../outseta/types";
-import { buildDemoData, DEMO_AGENT_UID } from "./data";
+import { buildDemoData, DEMO_AGENT_UID, DEMO_COMPANY_NAME } from "./data";
 import { createDemoFetch } from "./fetch";
 
-function demoClient() {
+function demoClient(agentName = "Alex") {
   const data = buildDemoData(new Date("2026-10-26T12:00:00Z"));
   const client = createClient(
     { subdomain: "demo", apiKey: "any", secretKey: "any" },
-    { agentName: "Alex", fetch: createDemoFetch(data) },
+    { agentName, fetch: createDemoFetch(data) },
   );
   return { data, client };
 }
@@ -96,6 +96,13 @@ describe("createDemoFetch", () => {
       Comment: "<p>Five times.</p>",
     });
     expect(after.LastActivity! > before.LastActivity!).toBe(true);
+  });
+
+  it("signs replies without an agent name with the company name", async () => {
+    const { client } = demoClient("");
+    await client.replyToCase(await client.getCase("case-webhook"), "Five times.");
+    const after = await client.getCase("case-webhook");
+    expect(after.CaseHistories?.at(-1)?.AgentName).toBe(DEMO_COMPANY_NAME);
   });
 
   it("answers unknown records with 404", async () => {

@@ -11,11 +11,11 @@ export interface Credentials {
 
 export interface ClientOptions {
   fetch?: typeof fetch;
-  /** Shown to customers as the sender of replies. */
+  /** Shown to customers as the sender of replies. Without it Outseta signs replies with the company name. */
   agentName?: string;
   /** Called before every write. Throw or reject to block it (guards the real account in development). */
   guardWrite?: (description: string, caseUid: string) => void | Promise<void>;
-  /** Delay before retrying a 429, in ms. */
+  /** Delay before retrying a 429 that has no Retry-After header, in ms. */
   retryDelayMs?: number;
 }
 
@@ -54,6 +54,15 @@ export class ReplyError extends Error {
 // Replies posted to spam cases are stored but not emailed.
 export function canReply(supportCase: Pick<Case, "Status">): boolean {
   return supportCase.Status !== CaseStatus.Spam;
+}
+
+/** Retry-After as a delay in ms: either seconds or an HTTP date. */
+export function retryAfterMs(header: string | null, now = Date.now()): number | undefined {
+  if (!header) return undefined;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const date = Date.parse(header);
+  return Number.isNaN(date) ? undefined : Math.max(0, date - now);
 }
 
 export interface SearchParams {
@@ -126,7 +135,8 @@ export function createClient(credentials: Credentials, options: ClientOptions = 
     if (response.status === 401 || response.status === 403) throw new AuthError();
     if (response.status === 429) {
       if (retried) throw new RateLimitError();
-      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      const delay = retryAfterMs(response.headers.get("Retry-After")) ?? retryDelayMs;
+      await new Promise((resolve) => setTimeout(resolve, delay));
       return request<T>(method, path, body, true);
     }
     if (!response.ok) {
@@ -184,18 +194,17 @@ export function createClient(credentials: Credentials, options: ClientOptions = 
     getCase: (uid: string) =>
       request<Case>("GET", `/support/cases/${encodeURIComponent(uid)}?fields=${CASE_DETAIL_FIELDS}`),
 
-    /** Posts the plain text as a reply. Outseta emails it to the customer with agentName as the sender name. */
+    /** Posts the plain text as a reply. Outseta emails it to the customer with agentName, or the company name, as the sender name. */
     async replyToCase(supportCase: Pick<Case, "Uid" | "Status">, text: string) {
       if (!canReply(supportCase)) {
         throw new ReplyError("Replies to spam cases are not emailed. Mark the case as not spam first.");
       }
       if (!text.trim()) throw new ReplyError("Write a reply first.");
       const agentName = options.agentName?.trim();
-      if (!agentName) throw new ReplyError("Set your agent name in the extension preferences.");
       await guard("reply to case", supportCase.Uid);
       await request<void>("POST", `/support/cases/${encodeURIComponent(supportCase.Uid)}/replies`, {
         Comment: plainTextToHtml(text),
-        AgentName: agentName,
+        ...(agentName ? { AgentName: agentName } : {}),
       });
     },
   };
